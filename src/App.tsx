@@ -20,10 +20,43 @@ import {
   X,
   Download,
   AlertCircle,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 export default function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Studio Theme State ('dark' | 'light') persisted in localStorage
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      const saved = localStorage.getItem('castframe_theme_v1');
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch {
+      // default dark
+    }
+    return 'dark';
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === 'light') {
+      root.classList.add('light-theme');
+      root.classList.remove('dark');
+    } else {
+      root.classList.remove('light-theme');
+      root.classList.add('dark');
+    }
+    try {
+      localStorage.setItem('castframe_theme_v1', theme);
+    } catch {
+      // ignore storage errors
+    }
+  }, [theme]);
+
+  const handleToggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   // Hidden media elements feeding the real-time Canvas Compositor
   const screenVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -814,7 +847,7 @@ export default function App() {
           CastFrame Studio
         </a>
 
-        {/* Zone 2: 4 clean navigation links */}
+        {/* Zone 2: 5 clean navigation links (including Theme Toggle) */}
         <nav className="hidden md:flex items-center gap-6 text-xs font-medium text-slate-400">
           <button
             onClick={() => setRightTab('overlays')}
@@ -847,6 +880,23 @@ export default function App() {
             }`}
           >
             Rekaman Video ({recordings.length})
+          </button>
+          <button
+            onClick={handleToggleTheme}
+            className="flex items-center gap-1.5 hover:text-slate-100 transition-colors whitespace-nowrap"
+            title={theme === 'dark' ? 'Beralih ke Tema Terang (Light)' : 'Beralih ke Tema Gelap (Dark)'}
+          >
+            {theme === 'dark' ? (
+              <>
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <span>Tema Terang</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-3.5 h-3.5 text-sky-400" />
+                <span>Tema Gelap</span>
+              </>
+            )}
           </button>
         </nav>
 
@@ -950,6 +1000,8 @@ export default function App() {
             slideIndex={slideIndex}
             onChangeSlide={setSlideIndex}
             webEmbedData={webEmbedData}
+            theme={theme}
+            onToggleTheme={handleToggleTheme}
           />
         </main>
 

@@ -22,6 +22,8 @@ import {
   Globe,
   FileText,
   Layers,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 interface BroadcastStageProps {
@@ -54,6 +56,8 @@ interface BroadcastStageProps {
     title: string;
     headlines: string[];
   };
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
 }
 
 const SLIDE_DECK_PAGES = [
@@ -137,6 +141,8 @@ export const BroadcastStage: React.FC<BroadcastStageProps> = ({
   slideIndex,
   onChangeSlide,
   webEmbedData,
+  theme,
+  onToggleTheme,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const wallpaperImgRef = useRef<HTMLImageElement | null>(null);
@@ -1228,6 +1234,25 @@ export const BroadcastStage: React.FC<BroadcastStageProps> = ({
           <span className="text-slate-500 hidden md:inline">
             Geser langsung kamera atau elemen di layar untuk mengubah tata letak
           </span>
+
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-900 border border-slate-800 hover:bg-slate-800 text-xs font-medium text-slate-300 transition-colors whitespace-nowrap"
+            title={theme === 'dark' ? 'Ubah ke Mode Terang (Light)' : 'Ubah ke Mode Gelap (Dark)'}
+          >
+            {theme === 'dark' ? (
+              <>
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <span>Light</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-3.5 h-3.5 text-sky-400" />
+                <span>Dark</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
 
