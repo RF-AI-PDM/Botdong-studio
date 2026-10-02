@@ -22,6 +22,12 @@ import {
   AlertCircle,
   Sun,
   Moon,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
+  GripVertical,
+  Keyboard,
 } from 'lucide-react';
 
 export default function App() {
@@ -65,6 +71,50 @@ export default function App() {
   const [uploadedImageEl, setUploadedImageEl] = useState<HTMLImageElement | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
 
+  // Custom Camera Photo / Avatar state (defaults to Robot Cyborg Armor image)
+  const [customCameraAvatarEl, setCustomCameraAvatarEl] = useState<HTMLImageElement | null>(null);
+  const [customCameraAvatarName, setCustomCameraAvatarName] = useState<string | null>(null);
+
+  // Flexible Resizable & Collapsible Sidebars state
+  const [leftSidebarWidth, setLeftSidebarWidth] = useState<number>(320);
+  const [rightSidebarWidth, setRightSidebarWidth] = useState<number>(350);
+  const [isLeftCollapsed, setIsLeftCollapsed] = useState<boolean>(false);
+  const [isRightCollapsed, setIsRightCollapsed] = useState<boolean>(false);
+  const [resizingSidebar, setResizingSidebar] = useState<{
+    side: 'left' | 'right';
+    startX: number;
+    startWidth: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!resizingSidebar) return;
+
+    const handlePointerMove = (e: PointerEvent) => {
+      if (resizingSidebar.side === 'left') {
+        const delta = e.clientX - resizingSidebar.startX;
+        const nextW = Math.max(220, Math.min(520, resizingSidebar.startWidth + delta));
+        setLeftSidebarWidth(Math.round(nextW));
+        setIsLeftCollapsed(false);
+      } else {
+        const delta = resizingSidebar.startX - e.clientX;
+        const nextW = Math.max(240, Math.min(540, resizingSidebar.startWidth + delta));
+        setRightSidebarWidth(Math.round(nextW));
+        setIsRightCollapsed(false);
+      }
+    };
+
+    const handlePointerUp = () => {
+      setResizingSidebar(null);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+  }, [resizingSidebar]);
+
   // Active Layout & Stage Source (Defaults to exact reference screenshot look!)
   const [layoutPreset, setLayoutPreset] = useState<LayoutPresetId>('pip-vertical-capsule');
   const [stageSource, setStageSource] = useState<StageSourceType>('linux-desktop-sim');
@@ -82,7 +132,7 @@ export default function App() {
     ],
   });
 
-  // Camera PiP Configuration (Matches reference screenshot: vertical capsule on bottom-right with golden border & badge)
+  // Camera PiP Configuration (Matches reference screenshot: vertical capsule on bottom-right with golden border)
   const [cameraConfig, setCameraConfig] = useState<CameraConfig>({
     enabled: true,
     useRealWebcam: false,
@@ -94,9 +144,9 @@ export default function App() {
     borderColor: '#F59E0B',
     borderWidth: 6,
     mirrored: false,
-    showBadge: true,
-    badgeText: 'NETWORK',
-    badgeSubtext: 'STUDIO LIVE',
+    showBadge: false,
+    badgeText: 'CYBORG',
+    badgeSubtext: 'LIVE',
     showCoHost: false,
   });
 
@@ -245,9 +295,9 @@ export default function App() {
           borderColor: '#F59E0B',
           borderWidth: 6,
           mirrored: false,
-          showBadge: true,
-          badgeText: 'NETWORK',
-          badgeSubtext: 'STUDIO LIVE',
+          showBadge: false,
+          badgeText: 'CYBORG',
+          badgeSubtext: 'LIVE',
           showCoHost: false,
         },
         overlays: [
@@ -638,6 +688,26 @@ export default function App() {
     }
   };
 
+  // Handle Uploading a Custom Photo for the Camera PiP Frame
+  const handleUploadCameraAvatar = (file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      setCustomCameraAvatarEl(img);
+      setCustomCameraAvatarName(file.name);
+      setCameraConfig((prev) => ({ ...prev, enabled: true, useRealWebcam: false }));
+      showNotice(`Foto kamera depan "${file.name}" berhasil diterapkan!`);
+    };
+    img.src = objectUrl;
+  };
+
+  const handleResetCameraAvatar = () => {
+    setCustomCameraAvatarEl(null);
+    setCustomCameraAvatarName(null);
+    showNotice('Foto kamera dikembalikan ke Robot Cyborg Armor.');
+  };
+
   // Toggle Web Speech API Live Auto-Subtitles
   const handleToggleSpeechRecognition = () => {
     if (!speechRecognitionSupported) return;
@@ -829,6 +899,87 @@ export default function App() {
     }
   };
 
+  // Keyboard Shortcuts Help Modal State & Global Hotkey Listener
+  const [showShortcutsModal, setShowShortcutsModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore hotkeys when typing in input, textarea, or contenteditable elements
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const key = e.key.toLowerCase();
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        handleToggleMic();
+      } else if (key === 'r') {
+        e.preventDefault();
+        handleToggleRecording();
+      } else if (key === 'g') {
+        e.preventDefault();
+        handleToggleStreaming();
+      } else if (key === 'c') {
+        e.preventDefault();
+        setCameraConfig((prev) => {
+          const next = !prev.enabled;
+          showNotice(next ? 'Kamera depan ditampilkan (Hotkey: C)' : 'Kamera depan disembunyikan (Hotkey: C)');
+          return { ...prev, enabled: next };
+        });
+      } else if (key === 'm') {
+        e.preventDefault();
+        setCameraConfig((prev) => {
+          const next = !prev.mirrored;
+          showNotice(next ? 'Cermin kamera aktif (Hotkey: M)' : 'Cermin kamera nonaktif (Hotkey: M)');
+          return { ...prev, mirrored: next };
+        });
+      } else if (key === 's') {
+        e.preventDefault();
+        handleSaveSnapshot();
+      } else if (key === 't') {
+        e.preventDefault();
+        handleToggleTheme();
+      } else if (e.key === '?' || key === 'h') {
+        e.preventDefault();
+        setShowShortcutsModal((prev) => !prev);
+      } else if (e.key === 'Escape') {
+        setShowShortcutsModal(false);
+        setPreviewClip(null);
+      } else if (['1', '2', '3', '4', '5', '6'].includes(e.key)) {
+        e.preventDefault();
+        const presets: LayoutPresetId[] = [
+          'pip-vertical-capsule',
+          'pip-circle-bubble',
+          'zoom-split-stage',
+          'side-by-side-50',
+          'screen-only',
+          'camera-solo',
+        ];
+        const chosen = presets[parseInt(e.key, 10) - 1];
+        if (chosen) {
+          setLayoutPreset(chosen);
+          if (chosen !== 'screen-only') {
+            setCameraConfig((prev) => ({ ...prev, enabled: true }));
+          }
+          showNotice(`Tata letak diubah ke preset #${e.key}`);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
+
   return (
     <div className="min-h-screen lg:h-screen flex flex-col bg-[#0B0F17] text-slate-100 overflow-hidden">
       {/* Hidden Video Elements for Canvas Compositor */}
@@ -847,7 +998,7 @@ export default function App() {
           CastFrame Studio
         </a>
 
-        {/* Zone 2: 5 clean navigation links (including Theme Toggle) */}
+        {/* Zone 2: 6 clean navigation links (including Theme & Shortcuts Help) */}
         <nav className="hidden md:flex items-center gap-6 text-xs font-medium text-slate-400">
           <button
             onClick={() => setRightTab('overlays')}
@@ -898,6 +1049,14 @@ export default function App() {
               </>
             )}
           </button>
+          <button
+            onClick={() => setShowShortcutsModal(true)}
+            className="flex items-center gap-1.5 hover:text-slate-100 transition-colors whitespace-nowrap"
+            title="Daftar Pintasan Keyboard (Hotkey: ? atau H)"
+          >
+            <Keyboard className="w-3.5 h-3.5 text-amber-400" />
+            <span>Pintasan (?)</span>
+          </button>
         </nav>
 
         {/* Zone 3: 2 primary actions (Record & Go Live) */}
@@ -945,28 +1104,71 @@ export default function App() {
         </div>
       )}
 
-      {/* MAIN 3-COLUMN STUDIO WORKSPACE */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
+      {/* MAIN 3-COLUMN STUDIO WORKSPACE WITH FLEXIBLE DRAG-TO-RESIZE SIDEBARS */}
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden relative">
         {/* Left Sidebar: Scene Layouts, Sources & Camera Frame Styling */}
-        <StudioSidebarLeft
-          layoutPreset={layoutPreset}
-          onSelectLayout={setLayoutPreset}
-          stageSource={stageSource}
-          onSelectSource={setStageSource}
-          onStartRealScreenShare={handleStartRealScreenShare}
-          onUploadMediaFile={handleUploadMediaFile}
-          uploadedFileName={uploadedFileName}
-          cameraConfig={cameraConfig}
-          onUpdateCamera={(patch) => setCameraConfig((prev) => ({ ...prev, ...patch }))}
-          webEmbedData={webEmbedData}
-          onUpdateWebEmbed={(patch) => setWebEmbedData((prev) => ({ ...prev, ...patch }))}
-          savedSnapshots={savedSnapshots}
-          activeSnapshotId={activeSnapshotId}
-          onSaveSnapshot={handleSaveSnapshot}
-          onApplySnapshot={handleApplySnapshot}
-          onOverwriteSnapshot={handleOverwriteSnapshot}
-          onDeleteSnapshot={handleDeleteSnapshot}
-        />
+        {!isLeftCollapsed && (
+          <StudioSidebarLeft
+            layoutPreset={layoutPreset}
+            onSelectLayout={setLayoutPreset}
+            stageSource={stageSource}
+            onSelectSource={setStageSource}
+            onStartRealScreenShare={handleStartRealScreenShare}
+            onUploadMediaFile={handleUploadMediaFile}
+            uploadedFileName={uploadedFileName}
+            cameraConfig={cameraConfig}
+            onUpdateCamera={(patch) => setCameraConfig((prev) => ({ ...prev, ...patch }))}
+            webEmbedData={webEmbedData}
+            onUpdateWebEmbed={(patch) => setWebEmbedData((prev) => ({ ...prev, ...patch }))}
+            savedSnapshots={savedSnapshots}
+            activeSnapshotId={activeSnapshotId}
+            onSaveSnapshot={handleSaveSnapshot}
+            onApplySnapshot={handleApplySnapshot}
+            onOverwriteSnapshot={handleOverwriteSnapshot}
+            onDeleteSnapshot={handleDeleteSnapshot}
+            widthPx={leftSidebarWidth}
+            onUploadCameraAvatar={handleUploadCameraAvatar}
+            customCameraAvatarName={customCameraAvatarName}
+            onResetCameraAvatar={handleResetCameraAvatar}
+            micEnabled={micEnabled}
+            micLevel={micLevel}
+            onToggleMic={handleToggleMic}
+            onOpenShortcutsModal={() => setShowShortcutsModal(true)}
+          />
+        )}
+
+        {/* Left Flexible Drag Splitter + Collapse/Expand Button */}
+        <div
+          onPointerDown={(e) => {
+            if (isLeftCollapsed) return;
+            e.preventDefault();
+            setResizingSidebar({
+              side: 'left',
+              startX: e.clientX,
+              startWidth: leftSidebarWidth,
+            });
+          }}
+          onDoubleClick={() => setLeftSidebarWidth(320)}
+          title="Tarik ke kiri/kanan untuk mengubah lebar Sidebar Kiri (Klik ganda untuk reset)"
+          className={`hidden lg:flex flex-col items-center justify-center w-2.5 shrink-0 bg-[#0B0F17] hover:bg-amber-500/20 border-r border-slate-800/80 transition-colors relative group ${
+            isLeftCollapsed ? 'cursor-pointer' : 'cursor-col-resize'
+          }`}
+        >
+          <GripVertical className="w-3 h-3 text-slate-600 group-hover:text-amber-400 pointer-events-none" />
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => setIsLeftCollapsed((prev) => !prev)}
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-20 p-1 rounded-md bg-slate-900 border border-slate-700 text-slate-300 hover:text-amber-400 hover:border-amber-500/50 shadow-md"
+            title={isLeftCollapsed ? 'Buka Sidebar Kiri' : 'Sembunyikan Sidebar Kiri'}
+          >
+            {isLeftCollapsed ? (
+              <PanelLeftOpen className="w-3.5 h-3.5" />
+            ) : (
+              <PanelLeftClose className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
 
         {/* Center Interactive Broadcast Canvas Stage */}
         <main className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
@@ -987,6 +1189,7 @@ export default function App() {
             webcamVideoEl={webcamVideoRef.current}
             uploadedVideoEl={uploadedVideoRef.current}
             uploadedImageEl={uploadedImageEl}
+            customCameraAvatarEl={customCameraAvatarEl}
             isRecording={isRecording}
             isStreaming={isStreaming}
             recordingSeconds={recordingSeconds}
@@ -1005,64 +1208,100 @@ export default function App() {
           />
         </main>
 
+        {/* Right Flexible Drag Splitter + Collapse/Expand Button */}
+        <div
+          onPointerDown={(e) => {
+            if (isRightCollapsed) return;
+            e.preventDefault();
+            setResizingSidebar({
+              side: 'right',
+              startX: e.clientX,
+              startWidth: rightSidebarWidth,
+            });
+          }}
+          onDoubleClick={() => setRightSidebarWidth(350)}
+          title="Tarik ke kiri/kanan untuk mengubah lebar Sidebar Kanan (Klik ganda untuk reset)"
+          className={`hidden lg:flex flex-col items-center justify-center w-2.5 shrink-0 bg-[#0B0F17] hover:bg-amber-500/20 border-l border-slate-800/80 transition-colors relative group ${
+            isRightCollapsed ? 'cursor-pointer' : 'cursor-col-resize'
+          }`}
+        >
+          <GripVertical className="w-3 h-3 text-slate-600 group-hover:text-amber-400 pointer-events-none" />
+          <button
+            type="button"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => setIsRightCollapsed((prev) => !prev)}
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-20 p-1 rounded-md bg-slate-900 border border-slate-700 text-slate-300 hover:text-amber-400 hover:border-amber-500/50 shadow-md"
+            title={isRightCollapsed ? 'Buka Sidebar Kanan' : 'Sembunyikan Sidebar Kanan'}
+          >
+            {isRightCollapsed ? (
+              <PanelRightOpen className="w-3.5 h-3.5" />
+            ) : (
+              <PanelRightClose className="w-3.5 h-3.5" />
+            )}
+          </button>
+        </div>
+
         {/* Right Sidebar: Live Subtitles, Floating Overlays, Multi-Stream RTMP & Recordings */}
-        <StudioSidebarRight
-          activeTab={rightTab}
-          onChangeTab={setRightTab}
-          subtitleConfig={subtitleConfig}
-          onUpdateSubtitle={(patch) => setSubtitleConfig((prev) => ({ ...prev, ...patch }))}
-          speechRecognitionSupported={speechRecognitionSupported}
-          isListeningSpeech={isListeningSpeech}
-          onToggleSpeechRecognition={handleToggleSpeechRecognition}
-          overlays={overlays}
-          onUpdateOverlay={(id, patch) =>
-            setOverlays((prev) =>
-              prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
-            )
-          }
-          onAddOverlay={(newItem) =>
-            setOverlays((prev) => [
-              ...prev,
-              { ...newItem, id: `ov-${Date.now()}` },
-            ])
-          }
-          onDeleteOverlay={(id) =>
-            setOverlays((prev) => prev.filter((item) => item.id !== id))
-          }
-          destinations={destinations}
-          onToggleDestination={(id) =>
-            setDestinations((prev) =>
-              prev.map((d) => (d.id === id ? { ...d, enabled: !d.enabled } : d))
-            )
-          }
-          onUpdateDestinationKey={(id, streamKey) =>
-            setDestinations((prev) =>
-              prev.map((d) => (d.id === id ? { ...d, streamKey } : d))
-            )
-          }
-          chatMessages={chatMessages}
-          onSendChatMessage={(text) =>
-            setChatMessages((prev) => [
-              ...prev,
-              {
-                id: `chat-${Date.now()}`,
-                author: 'Anda (Host Studio)',
-                platform: 'YouTube Live',
-                text,
-                timestamp: new Date().toLocaleTimeString('id-ID', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                }),
-              },
-            ])
-          }
-          onPinChatToStage={handlePinChatToStage}
-          recordings={recordings}
-          onPreviewRecording={setPreviewClip}
-          onDeleteRecording={(id) =>
-            setRecordings((prev) => prev.filter((r) => r.id !== id))
-          }
-        />
+        {!isRightCollapsed && (
+          <StudioSidebarRight
+            activeTab={rightTab}
+            onChangeTab={setRightTab}
+            subtitleConfig={subtitleConfig}
+            onUpdateSubtitle={(patch) => setSubtitleConfig((prev) => ({ ...prev, ...patch }))}
+            speechRecognitionSupported={speechRecognitionSupported}
+            isListeningSpeech={isListeningSpeech}
+            onToggleSpeechRecognition={handleToggleSpeechRecognition}
+            overlays={overlays}
+            onUpdateOverlay={(id, patch) =>
+              setOverlays((prev) =>
+                prev.map((item) => (item.id === id ? { ...item, ...patch } : item))
+              )
+            }
+            onAddOverlay={(newItem) =>
+              setOverlays((prev) => [
+                ...prev,
+                { ...newItem, id: `ov-${Date.now()}` },
+              ])
+            }
+            onDeleteOverlay={(id) =>
+              setOverlays((prev) => prev.filter((item) => item.id !== id))
+            }
+            destinations={destinations}
+            onToggleDestination={(id) =>
+              setDestinations((prev) =>
+                prev.map((d) => (d.id === id ? { ...d, enabled: !d.enabled } : d))
+              )
+            }
+            onUpdateDestinationKey={(id, streamKey) =>
+              setDestinations((prev) =>
+                prev.map((d) => (d.id === id ? { ...d, streamKey } : d))
+              )
+            }
+            chatMessages={chatMessages}
+            onSendChatMessage={(text) =>
+              setChatMessages((prev) => [
+                ...prev,
+                {
+                  id: `chat-${Date.now()}`,
+                  author: 'Anda (Host Studio)',
+                  platform: 'YouTube Live',
+                  text,
+                  timestamp: new Date().toLocaleTimeString('id-ID', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }),
+                },
+              ])
+            }
+            onPinChatToStage={handlePinChatToStage}
+            recordings={recordings}
+            onPreviewRecording={setPreviewClip}
+            onDeleteRecording={(id) =>
+              setRecordings((prev) => prev.filter((r) => r.id !== id))
+            }
+            widthPx={rightSidebarWidth}
+          />
+        )}
       </div>
 
       {/* Instant Video Recording Preview Modal */}
@@ -1113,6 +1352,103 @@ export default function App() {
                 <Download className="w-4 h-4" />
                 <span>Unduh Video (.WEBM)</span>
               </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Keyboard Shortcuts / Hotkey Help Modal */}
+      {showShortcutsModal && (
+        <div
+          onClick={() => setShowShortcutsModal(false)}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl rounded-xl bg-[#0F1522] border border-slate-700 shadow-2xl overflow-hidden"
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <Keyboard className="w-5 h-5 text-amber-400" />
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-100">
+                    Daftar Pintasan Keyboard (Studio Hotkeys)
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Gunakan tombol cepat berikut saat berada di luar kolom input teks
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowShortcutsModal(false)}
+                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5 max-h-[75vh] overflow-y-auto">
+              {/* Group 1: Audio & Broadcast Control */}
+              <div className="space-y-2.5">
+                <h4 className="text-xs font-semibold text-amber-400 tracking-tight">
+                  01. Kontrol Siaran, Rekaman & Audio
+                </h4>
+                <div className="space-y-2">
+                  {[
+                    { key: 'Space', label: 'Mute / Unmute Mikrofon' },
+                    { key: 'R', label: 'Mulai / Hentikan Rekaman Video' },
+                    { key: 'G', label: 'Mulai / Akhiri Siaran Langsung (Go Live)' },
+                    { key: 'S', label: 'Simpan Snapshot Tata Letak (Preset)' },
+                  ].map((item) => (
+                    <div
+                      key={item.key}
+                      className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-900/90 border border-slate-800 text-xs"
+                    >
+                      <span className="text-slate-200">{item.label}</span>
+                      <kbd className="px-2 py-0.5 rounded bg-slate-950 border border-slate-700 font-mono text-[11px] font-semibold text-amber-400">
+                        {item.key}
+                      </kbd>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Group 2: Camera & Scene Layouts */}
+              <div className="space-y-2.5">
+                <h4 className="text-xs font-semibold text-sky-400 tracking-tight">
+                  02. Kamera Depan & Tata Letak Panggung
+                </h4>
+                <div className="space-y-2">
+                  {[
+                    { key: 'C', label: 'Tampilkan / Sembunyikan Kamera PiP' },
+                    { key: 'M', label: 'Cerminkan Kamera (Mirror Horizontal)' },
+                    { key: '1 – 6', label: 'Pilih Cepat 6 Preset Tata Letak Panggung' },
+                    { key: 'T', label: 'Ganti Tema Gelap / Terang (Dark/Light)' },
+                    { key: '? / H', label: 'Buka / Tutup Modal Bantuan Shortcut' },
+                    { key: 'Esc', label: 'Tutup Jendela Modal Aktif' },
+                  ].map((item) => (
+                    <div
+                      key={item.key}
+                      className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-900/90 border border-slate-800 text-xs"
+                    >
+                      <span className="text-slate-200">{item.label}</span>
+                      <kbd className="px-2 py-0.5 rounded bg-slate-950 border border-slate-700 font-mono text-[11px] font-semibold text-sky-400">
+                        {item.key}
+                      </kbd>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between px-5 py-3 bg-slate-900/90 border-t border-slate-800 text-xs text-slate-400">
+              <span>Tips: Geser pembatas vertikal sidebar untuk mengatur luas area panggung.</span>
+              <button
+                onClick={() => setShowShortcutsModal(false)}
+                className="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold transition-colors"
+              >
+                Mengerti
+              </button>
             </div>
           </div>
         </div>

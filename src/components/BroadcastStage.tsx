@@ -7,7 +7,7 @@ import {
   SubtitleConfig,
 } from '../types/studio';
 import wallpaperUrl from '../assets/images/wallpaper_classical_river_1790916439301.jpg';
-import presenterUrl from '../assets/images/presenter_studio_cam_1790916458480.jpg';
+import presenterUrl from '../assets/images/presenter_robot_cam_1790919327758.jpg';
 import {
   Move,
   Maximize2,
@@ -39,6 +39,7 @@ interface BroadcastStageProps {
   webcamVideoEl: HTMLVideoElement | null;
   uploadedVideoEl: HTMLVideoElement | null;
   uploadedImageEl: HTMLImageElement | null;
+  customCameraAvatarEl: HTMLImageElement | null;
   isRecording: boolean;
   isStreaming: boolean;
   recordingSeconds: number;
@@ -128,6 +129,7 @@ export const BroadcastStage: React.FC<BroadcastStageProps> = ({
   webcamVideoEl,
   uploadedVideoEl,
   uploadedImageEl,
+  customCameraAvatarEl,
   isRecording,
   isStreaming,
   recordingSeconds,
@@ -612,9 +614,10 @@ export const BroadcastStage: React.FC<BroadcastStageProps> = ({
             ctx.drawImage(webcamVideoEl, cx + (cw - dw) / 2, cy + (ch - dh) / 2, dw, dh);
           }
           ctx.restore();
-        } else if (!isCoHost && presenterImgRef.current) {
-          const iw = presenterImgRef.current.naturalWidth || 900;
-          const ih = presenterImgRef.current.naturalHeight || 1200;
+        } else if (!isCoHost && (customCameraAvatarEl || presenterImgRef.current)) {
+          const activeImg = customCameraAvatarEl || presenterImgRef.current!;
+          const iw = activeImg.naturalWidth || 900;
+          const ih = activeImg.naturalHeight || 1200;
           const scale = Math.max(cw / iw, ch / ih);
           const dw = iw * scale;
           const dh = ih * scale;
@@ -623,9 +626,9 @@ export const BroadcastStage: React.FC<BroadcastStageProps> = ({
           if (cameraConfig.mirrored) {
             ctx.translate(cx + cw / 2, cy + ch / 2);
             ctx.scale(-1, 1);
-            ctx.drawImage(presenterImgRef.current, -dw / 2, -dh / 2, dw, dh);
+            ctx.drawImage(activeImg, -dw / 2, -dh / 2, dw, dh);
           } else {
-            ctx.drawImage(presenterImgRef.current, cx + (cw - dw) / 2, cy + (ch - dh) / 2, dw, dh);
+            ctx.drawImage(activeImg, cx + (cw - dw) / 2, cy + (ch - dh) / 2, dw, dh);
           }
           ctx.restore();
         } else {
@@ -1118,6 +1121,7 @@ export const BroadcastStage: React.FC<BroadcastStageProps> = ({
     webcamVideoEl,
     uploadedVideoEl,
     uploadedImageEl,
+    customCameraAvatarEl,
     micEnabled,
     micLevel,
     showStageWaveform,

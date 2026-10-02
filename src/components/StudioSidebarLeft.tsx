@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   CameraConfig,
   LayoutPresetId,
@@ -21,6 +21,10 @@ import {
   BookmarkCheck,
   Trash2,
   RotateCcw,
+  Mic,
+  MicOff,
+  Activity,
+  Keyboard,
 } from 'lucide-react';
 
 interface StudioSidebarLeftProps {
@@ -45,6 +49,14 @@ interface StudioSidebarLeftProps {
   onApplySnapshot: (snapshot: LayoutSnapshotPreset) => void;
   onOverwriteSnapshot: (id: string) => void;
   onDeleteSnapshot: (id: string) => void;
+  widthPx: number;
+  onUploadCameraAvatar: (file: File) => void;
+  customCameraAvatarName: string | null;
+  onResetCameraAvatar: () => void;
+  micEnabled: boolean;
+  micLevel: number;
+  onToggleMic: () => void;
+  onOpenShortcutsModal: () => void;
 }
 
 const LAYOUT_PRESETS: {
@@ -102,10 +114,138 @@ export const StudioSidebarLeft: React.FC<StudioSidebarLeftProps> = ({
   onApplySnapshot,
   onOverwriteSnapshot,
   onDeleteSnapshot,
+  widthPx,
+  onUploadCameraAvatar,
+  customCameraAvatarName,
+  onResetCameraAvatar,
+  micEnabled,
+  micLevel,
+  onToggleMic,
+  onOpenShortcutsModal,
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const camAvatarInputRef = useRef<HTMLInputElement | null>(null);
   const [snapshotNameInput, setSnapshotNameInput] = useState<string>('');
   const [showNamePrompt, setShowNamePrompt] = useState<boolean>(false);
+
+  // Sidebar Real-Time Audio Waveform Visualizer State & Ref
+  const sidebarWaveCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const waveHistoryRef = useRef<number[]>(Array(36).fill(4));
+  const [testMicWave, setTestMicWave] = useState<boolean>(false);
+  const [peakMicLevel, setPeakMicLevel] = useState<number>(0);
+
+  const effectiveSidebarLevel = micEnabled
+    ? micLevel
+    : testMicWave
+      ? 58
+      : 0;
+
+  useEffect(() => {
+    if (effectiveSidebarLevel > peakMicLevel) {
+      setPeakMicLevel(effectiveSidebarLevel);
+    } else {
+      const timer = setTimeout(() => {
+        setPeakMicLevel((prev) => Math.max(effectiveSidebarLevel, Math.round(prev * 0.92)));
+      }, 250);
+      return () => clearTimeout(timer);
+    }
+  }, [effectiveSidebarLevel, peakMicLevel]);
+
+  // 60 FPS Sidebar Audio Waveform Canvas Renderer
+  useEffect(() => {
+    let animId: number;
+
+    const renderSidebarWave = (timestamp: number) => {
+      const canvas = sidebarWaveCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          const W = canvas.width;
+          const H = canvas.height;
+          ctx.clearRect(0, 0, W, H);
+
+          const liveLvl = micEnabled
+            ? micLevel
+            : testMicWave
+              ? Math.round(52 + Math.sin(timestamp / 110) * 26 + Math.cos(timestamp / 70) * 14)
+              : 0;
+
+          const hist = waveHistoryRef.current;
+          if (timestamp % 2 < 1.5) {
+            const mod =
+              liveLvl > 0
+                ? Math.sin(timestamp / 55) * 14 + Math.cos(timestamp / 90) * 9
+                : 0;
+            hist.push(Math.max(4, Math.min(100, liveLvl + mod)));
+            if (hist.length > 36) hist.shift();
+          }
+
+          // Background grid lines
+          ctx.strokeStyle = 'rgba(148, 163, 184, 0.1)';
+          ctx.lineWidth = 1;
+          [0.25, 0.5, 0.75].forEach((ratio) => {
+            ctx.beginPath();
+            ctx.moveTo(0, H * ratio);
+            ctx.lineTo(W, H * ratio);
+            ctx.stroke();
+          });
+
+          // Multi-band frequency bars
+          const barCount = 32;
+          const step = W / barCount;
+          const barW = Math.max(3, step - 3);
+
+          for (let i = 0; i < barCount; i++) {
+            const val = hist[i % hist.length] || 4;
+            const env = Math.sin((i / barCount) * Math.PI);
+            const harmonic =
+              liveLvl > 0
+                ? Math.abs(Math.sin(timestamp / 80 + i * 0.48)) * 0.65 + 0.35
+                : 0.08;
+            const norm = Math.min(1, (val / 100) * harmonic * (0.35 + env * 0.65));
+            const bh = Math.max(4, norm * (H - 10));
+
+            if (norm > 0.78) {
+              ctx.fillStyle = '#F43F5E'; // Clip / Peak
+            } else if (norm > 0.48) {
+              ctx.fillStyle = '#F59E0B'; // Nominal High
+            } else if (micEnabled || testMicWave) {
+              ctx.fillStyle = '#10B981'; // Clean Signal
+            } else {
+              ctx.fillStyle = '#334155'; // Muted Idle
+            }
+
+            const bx = i * step + 1.5;
+            const by = (H - bh) / 2;
+            ctx.beginPath();
+            ctx.roundRect(bx, by, barW, bh, 2);
+            ctx.fill();
+          }
+
+          // Smooth oscilloscope sine wave overlay when active
+          if (liveLvl > 2) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.strokeStyle = 'rgba(56, 189, 248, 0.9)';
+            ctx.lineWidth = 1.75;
+            for (let x = 0; x <= W; x += 4) {
+              const phase = (x / W) * Math.PI * 5 + timestamp / 60;
+              const amp = (liveLvl / 100) * (H * 0.38);
+              const y = H / 2 + Math.sin(phase) * amp * Math.sin((x / W) * Math.PI);
+              if (x === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }
+      animId = requestAnimationFrame(renderSidebarWave);
+    };
+
+    animId = requestAnimationFrame(renderSidebarWave);
+    return () => cancelAnimationFrame(animId);
+  }, [micEnabled, micLevel, testMicWave]);
 
   const handleLayoutClick = (preset: LayoutPresetId) => {
     onSelectLayout(preset);
@@ -140,7 +280,10 @@ export const StudioSidebarLeft: React.FC<StudioSidebarLeftProps> = ({
   };
 
   return (
-    <aside className="w-full lg:w-[320px] shrink-0 bg-[#0F1522] border-r border-slate-800/80 flex flex-col h-full overflow-y-auto">
+    <aside
+      style={{ width: `${widthPx}px` }}
+      className="w-full lg:w-auto shrink-0 bg-[#0F1522] border-r border-slate-800/80 flex flex-col h-full overflow-y-auto"
+    >
       {/* 1. TATA LETAK PANGGUNG (DYNAMIC SCENE LAYOUTS) */}
       <div className="p-4 border-b border-slate-800/80 space-y-3">
         <div className="flex items-center justify-between">
@@ -462,6 +605,46 @@ export const StudioSidebarLeft: React.FC<StudioSidebarLeftProps> = ({
           </label>
         </div>
 
+        {/* Custom Camera Photo / Avatar Uploader */}
+        <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800/90 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-medium text-slate-300 truncate">
+              {customCameraAvatarName
+                ? `Foto: ${customCameraAvatarName}`
+                : 'Foto Kamera: Robot Cyborg Armor'}
+            </span>
+            <div className="flex items-center gap-1 shrink-0">
+              {customCameraAvatarName && (
+                <button
+                  type="button"
+                  onClick={onResetCameraAvatar}
+                  className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-[10px] font-mono text-slate-300"
+                >
+                  Reset
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => camAvatarInputRef.current?.click()}
+                className="flex items-center gap-1 px-2.5 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-[11px] font-medium text-amber-300 whitespace-nowrap"
+              >
+                <Upload className="w-3 h-3" />
+                <span>Ganti Foto</span>
+              </button>
+            </div>
+          </div>
+          <input
+            ref={camAvatarInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onUploadCameraAvatar(file);
+            }}
+          />
+        </div>
+
         {/* Shape Selector */}
         <div>
           <label className="block text-[11px] text-slate-400 mb-1.5">
@@ -620,6 +803,105 @@ export const StudioSidebarLeft: React.FC<StudioSidebarLeftProps> = ({
             )}
           </div>
         </div>
+      </div>
+
+      {/* 4. VISUALISATOR GELOMBANG AUDIO MIKROFON (SIDEBAR REAL-TIME MONITOR) */}
+      <div className="p-4 border-t border-slate-800/80 space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-semibold text-slate-200 flex items-center gap-2">
+            <Activity className="w-4 h-4 text-emerald-400" />
+            <span>04. Monitor Gelombang Audio</span>
+          </h2>
+          <span
+            className={`text-[10px] font-mono tabular-nums font-semibold ${
+              effectiveSidebarLevel > 78
+                ? 'text-rose-400'
+                : effectiveSidebarLevel > 45
+                  ? 'text-amber-400'
+                  : micEnabled || testMicWave
+                    ? 'text-emerald-400'
+                    : 'text-slate-500'
+            }`}
+          >
+            {effectiveSidebarLevel > 0
+              ? `${(-48 + (effectiveSidebarLevel / 100) * 46).toFixed(1)} dB`
+              : '-∞ dB (Muted)'}
+          </span>
+        </div>
+
+        {/* Live Waveform Canvas Box */}
+        <div className="p-2.5 rounded-xl bg-[#090D16] border border-slate-800/90 space-y-2">
+          <canvas
+            ref={sidebarWaveCanvasRef}
+            width={280}
+            height={58}
+            className="w-full h-[58px] block rounded"
+          />
+
+          {/* Level & Peak Readouts */}
+          <div className="flex items-center justify-between text-[10px] font-mono tabular-nums text-slate-400 pt-1 border-t border-slate-800/70">
+            <span>INPUT: {Math.round(effectiveSidebarLevel)}%</span>
+            <span>PEAK: {Math.round(peakMicLevel)}%</span>
+            <span className={micEnabled ? 'text-emerald-400' : 'text-rose-400'}>
+              {micEnabled ? '● LIVE MIC' : '○ MUTED'}
+            </span>
+          </div>
+        </div>
+
+        {/* Mic Mute/Unmute (Space) & Test Signal Controls */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleMic}
+            className={`flex-1 flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+              micEnabled
+                ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/25'
+                : 'bg-rose-950/60 border-rose-800/70 text-rose-300 hover:bg-rose-900/50'
+            }`}
+          >
+            <span className="flex items-center gap-1.5 truncate">
+              {micEnabled ? (
+                <Mic className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              ) : (
+                <MicOff className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+              )}
+              <span className="truncate">{micEnabled ? 'Mute Mic' : 'Unmute Mic'}</span>
+            </span>
+            <kbd className="px-1.5 py-0.5 rounded bg-slate-950/90 border border-slate-700 text-[10px] font-mono text-slate-300 shrink-0">
+              Space
+            </kbd>
+          </button>
+
+          {!micEnabled && (
+            <button
+              type="button"
+              onClick={() => setTestMicWave((prev) => !prev)}
+              className={`px-2.5 py-2 rounded-lg text-xs font-mono border transition-colors whitespace-nowrap ${
+                testMicWave
+                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                  : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+              }`}
+              title="Simulasikan input gelombang audio pada sidebar"
+            >
+              {testMicWave ? 'Tes: ON' : 'Uji Audio'}
+            </button>
+          )}
+        </div>
+
+        {/* Open Keyboard Shortcuts Help Modal Button */}
+        <button
+          type="button"
+          onClick={onOpenShortcutsModal}
+          className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-slate-900/90 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <Keyboard className="w-3.5 h-3.5 text-amber-400" />
+            <span>Daftar Shortcut & Hotkey Studio</span>
+          </span>
+          <kbd className="px-1.5 py-0.5 rounded bg-slate-950 border border-slate-700 text-[10px] font-mono text-amber-400">
+            ?
+          </kbd>
+        </button>
       </div>
     </aside>
   );

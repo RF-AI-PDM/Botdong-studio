@@ -45,6 +45,7 @@ interface StudioSidebarRightProps {
   recordings: RecordedClip[];
   onPreviewRecording: (clip: RecordedClip) => void;
   onDeleteRecording: (id: string) => void;
+  widthPx: number;
 }
 
 export const StudioSidebarRight: React.FC<StudioSidebarRightProps> = ({
@@ -68,6 +69,7 @@ export const StudioSidebarRight: React.FC<StudioSidebarRightProps> = ({
   recordings,
   onPreviewRecording,
   onDeleteRecording,
+  widthPx,
 }) => {
   const [newOverlayType, setNewOverlayType] = useState<'lower-third' | 'file-card' | 'web-widget'>('file-card');
   const [newOverlayTitle, setNewOverlayTitle] = useState('');
@@ -102,7 +104,10 @@ export const StudioSidebarRight: React.FC<StudioSidebarRightProps> = ({
   };
 
   return (
-    <aside className="w-full lg:w-[350px] shrink-0 bg-[#0F1522] border-l border-slate-800/80 flex flex-col h-full overflow-hidden">
+    <aside
+      style={{ width: `${widthPx}px` }}
+      className="w-full lg:w-auto shrink-0 bg-[#0F1522] border-l border-slate-800/80 flex flex-col h-full overflow-hidden"
+    >
       {/* Segmented Control Tabs */}
       <div className="p-3 border-b border-slate-800/80">
         <div className="grid grid-cols-3 gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800">
