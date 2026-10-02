@@ -1,0 +1,10 @@
+{
+  "name": "CastFrame Studio",
+  "description": "Studio siaran langsung dan perekam layar real-time dengan tata letak kamera Picture-in-Picture dinamis, multi-sumber media, dan streaming multi-platform.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "display-capture"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
